@@ -1,0 +1,1389 @@
+<!DOCTYPE html>
+<html lang="pl" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EliteTracker — Twój Dziennik Masy i Progresu</title>
+    <link rel="icon" type="image/jpeg" href="https://media.discordapp.net/attachments/1468342948319203389/1546876731485458442/image.jpg?ex=6afc5838&is=6afb06b8&hm=ac38ccd406d29c53dc2eec334c0338c0298bba2075ecac9a15f91751b60c385d&format=webp&width=1024&height=1024">
+    
+    <!-- Meta tagi pod aplikację mobilną (PWA) -->
+    <meta name="theme-color" content="#0f1210">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="EliteTracker">
+    <link rel="apple-touch-icon" href="https://media.discordapp.net/attachments/1468342948319203389/1546876731485458442/image.jpg?ex=6afc5838&is=6afb06b8&hm=ac38ccd406d29c53dc2eec334c0338c0298bba2075ecac9a15f91751b60c385d&format=webp&width=1024&height=1024">
+
+    <!-- Statyczny Manifest PWA zapobiegający białemu ekranowi na iOS/Androidzie -->
+    <link rel="manifest" href="data:application/json;charset=utf-8,%7B%22name%22%3A%22EliteTracker%22%2C%22short_name%22%3A%22EliteTracker%22%2C%22start_url%22%3A%22.%2Findex.html%22%2C%22display%22%3A%22standalone%22%2C%22background_color%22%3A%22%230f1210%22%2C%22theme_color%22%3A%22%230f1210%22%2C%22icons%22%3A%5B%7B%22src%22%3A%22https%3A%2F%2Fmedia.discordapp.net%2Fattachments%2F1468342948319203389%2F1546876731485458442%2Fimage.jpg%3Fex%3D6afc5838%26is%3D6afb06b8%26hm%3Dac38ccd406d29c53dc2eec334c0338c0298bba2075ecac9a15f91751b60c385d%26format%3Dwebp%26width%3D1024%26height%3D1024%22%2C%22sizes%22%3A%22512x512%22%2C%22type%22%3A%22image%2Fjpeg%22%7D%5D%7D">
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js dla wykresu wagi -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Google Fonts: Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                    colors: {
+                        darkbg: '#0f1210',
+                        cardbg: '#181c19',
+                        cardhover: '#202622',
+                        borderdark: '#2a322c',
+                        limeaccent: '#a3e635',
+                        limedark: '#65a30d',
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            background-color: #0f1210;
+            color: #f3f4f6;
+            font-family: 'Inter', sans-serif;
+            -webkit-tap-highlight-color: transparent;
+        }
+        /* Niestandardowy pasek przewijania */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0f1210;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #2a322c;
+            border-radius: 9999px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #a3e635;
+        }
+        /* Stylizacja inputów daty w ciemnym motywie */
+        input[type="date"]::-webkit-calendar-picker-indicator {
+            filter: invert(1);
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col selection:bg-limeaccent selection:text-black bg-darkbg text-gray-100">
+
+    <!-- Komunikat Toast (zamiast alert()) -->
+    <div id="toast-container" class="fixed bottom-5 right-5 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
+    <!-- Modal potwierdzenia akcji (zamiast confirm()) -->
+    <div id="confirm-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden items-center justify-center p-4">
+        <div class="bg-cardbg border border-borderdark rounded-2xl max-w-md w-full p-6 shadow-2xl">
+            <h3 id="modal-title" class="text-lg font-bold text-white mb-2">Potwierdź akcję</h3>
+            <p id="modal-desc" class="text-sm text-gray-400 mb-6">Czy na pewno chcesz wykonać tę operację?</p>
+            <div class="flex justify-end gap-3">
+                <button id="modal-cancel" class="px-4 py-2.5 rounded-xl bg-gray-800 hover:bg-gray-700 text-gray-300 text-sm font-medium transition">Anuluj</button>
+                <button id="modal-confirm" class="px-4 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 text-white text-sm font-semibold transition">Potwierdź</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Edycji Celów -->
+    <div id="goals-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden items-center justify-center p-4">
+        <div class="bg-cardbg border border-borderdark rounded-2xl max-w-md w-full p-6 shadow-2xl">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-bold text-white">Edytuj Swoje Cele</h3>
+                <button onclick="closeGoalsModal()" class="text-gray-400 hover:text-white p-1">✕</button>
+            </div>
+            <form id="goals-form" class="space-y-4">
+                <div>
+                    <label class="block text-xs font-medium text-gray-400 mb-1">Waga startowa (kg)</label>
+                    <input type="number" step="0.1" id="goal-start-weight" required class="w-full bg-darkbg border border-borderdark rounded-xl px-3.5 py-2.5 text-white focus:outline-none focus:border-limeaccent">
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-gray-400 mb-1">Dzienny cel kaloryczny (kcal)</label>
+                    <input type="number" id="goal-kcal" required class="w-full bg-darkbg border border-borderdark rounded-xl px-3.5 py-2.5 text-white focus:outline-none focus:border-limeaccent">
+                </div>
+                <div class="grid grid-cols-3 gap-3">
+                    <div>
+                        <label class="block text-xs font-medium text-gray-400 mb-1">Białko (g)</label>
+                        <input type="number" id="goal-protein" required class="w-full bg-darkbg border border-borderdark rounded-xl px-3 py-2.5 text-white focus:outline-none focus:border-limeaccent">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-gray-400 mb-1">Tłuszcze (g)</label>
+                        <input type="number" id="goal-fat" required class="w-full bg-darkbg border border-borderdark rounded-xl px-3.5 py-2.5 text-white focus:outline-none focus:border-limeaccent">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-gray-400 mb-1">Węgle (g)</label>
+                        <input type="number" id="goal-carbs" required class="w-full bg-darkbg border border-borderdark rounded-xl px-3.5 py-2.5 text-white focus:outline-none focus:border-limeaccent">
+                    </div>
+                </div>
+                <div class="pt-2 flex justify-end gap-3">
+                    <button type="button" onclick="closeGoalsModal()" class="px-4 py-2.5 rounded-xl bg-gray-800 hover:bg-gray-700 text-gray-300 text-sm font-medium">Anuluj</button>
+                    <button type="submit" class="px-5 py-2.5 rounded-xl bg-limeaccent hover:bg-lime-300 text-black font-bold text-sm transition">Zapisz Cele</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Górny pasek nawigacji -->
+    <header class="sticky top-0 z-30 bg-darkbg/90 backdrop-blur-md border-b border-borderdark">
+        <div class="max-w-6xl mx-auto px-4 py-3.5 flex flex-wrap items-center justify-between gap-3">
+            <div class="flex items-center gap-2.5">
+                <div class="w-10 h-10 rounded-xl bg-limeaccent border border-limeaccent/40 overflow-hidden flex items-center justify-center text-black font-extrabold text-lg shadow-lg shadow-limeaccent/20 shrink-0">
+                    <img 
+                        src="https://media.discordapp.net/attachments/1468342948319203389/1546876731485458442/image.jpg?ex=6afc5838&is=6afb06b8&hm=ac38ccd406d29c53dc2eec334c0338c0298bba2075ecac9a15f91751b60c385d&format=webp&width=1024&height=1024" 
+                        alt="EliteTracker Logo" 
+                        class="w-full h-full object-cover"
+                        onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';"
+                    >
+                    <span class="hidden w-full h-full items-center justify-center">ET</span>
+                </div>
+                <div>
+                    <h1 class="font-bold text-white text-base sm:text-lg leading-tight">EliteTracker</h1>
+                    <p class="text-[11px] text-gray-400">Cel: <span id="header-target-kcal" class="text-limeaccent font-semibold">3200 kcal</span> • Start: <span id="header-start-weight">57.0 kg</span></p>
+                </div>
+            </div>
+
+            <div class="flex items-center gap-2">
+                <button onclick="openGoalsModal()" class="px-3 py-2 rounded-xl bg-cardbg hover:bg-cardhover border border-borderdark text-xs font-medium text-gray-300 flex items-center gap-1.5 transition">
+                    <svg class="w-4 h-4 text-limeaccent" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                    <span>Cele</span>
+                </button>
+                <button onclick="exportCSV()" class="px-3 py-2 rounded-xl bg-cardbg hover:bg-cardhover border border-borderdark text-xs font-medium text-gray-300 flex items-center gap-1.5 transition" title="Pobierz raport w CSV">
+                    <svg class="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+                    <span class="hidden sm:inline">Eksport CSV</span>
+                </button>
+                <button onclick="confirmReset()" class="px-3 py-2 rounded-xl bg-cardbg hover:bg-red-950/50 border border-borderdark hover:border-red-800 text-xs font-medium text-red-400 transition" title="Wyczyść dane">
+                    Reset
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Główna zawartość -->
+    <main class="flex-1 max-w-6xl w-full mx-auto px-4 py-6 space-y-6">
+
+        <!-- Baner informacyjny o danych przykładowych -->
+        <div id="sample-banner" class="hidden bg-limeaccent/10 border border-limeaccent/30 rounded-2xl p-3.5 flex flex-wrap items-center justify-between gap-3">
+            <div class="flex items-center gap-2.5 text-xs sm:text-sm text-lime-200">
+                <span class="text-lg">💡</span>
+                <span>Wczytano przykładowy wpis startowy (Dzień 1 / Waga 57,0 kg), żebyś zobaczył jak działają statystyki.</span>
+            </div>
+            <button onclick="clearSampleData()" class="px-3 py-1.5 rounded-xl bg-limeaccent text-black font-bold text-xs hover:bg-lime-300 transition">
+                Wyczyść przykład i zacznij od zera
+            </button>
+        </div>
+
+        <!-- 1. PODSUMOWANIE (KPI CARDS) -->
+        <section aria-label="Podsumowanie postępów">
+            <div class="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
+                <!-- Karta 1: Aktualna waga -->
+                <div class="bg-cardbg border border-borderdark rounded-2xl p-4 flex flex-col justify-between">
+                    <span class="text-xs font-medium text-gray-400">Aktualna Waga</span>
+                    <div class="mt-2 flex items-baseline gap-1.5">
+                        <span id="kpi-current-weight" class="text-2xl sm:text-3xl font-extrabold text-white">57.0</span>
+                        <span class="text-xs font-semibold text-gray-400">kg</span>
+                    </div>
+                    <span id="kpi-weight-date" class="text-[11px] text-gray-500 mt-1">Pomiar startowy</span>
+                </div>
+
+                <!-- Karta 2: Przyrost całkowity -->
+                <div class="bg-cardbg border border-borderdark rounded-2xl p-4 flex flex-col justify-between">
+                    <span class="text-xs font-medium text-gray-400">Przyrost Całkowity</span>
+                    <div class="mt-2 flex items-baseline gap-1.5">
+                        <span id="kpi-total-gain-kg" class="text-2xl sm:text-3xl font-extrabold text-limeaccent">+0.00</span>
+                        <span class="text-xs font-semibold text-gray-400">kg</span>
+                    </div>
+                    <span id="kpi-total-gain-g" class="text-[11px] font-medium text-limeaccent/80 mt-1">+0 g od startu</span>
+                </div>
+
+                <!-- Karta 3: Ostatni tydzień (w gramach!) -->
+                <div class="bg-cardbg border border-borderdark rounded-2xl p-4 flex flex-col justify-between">
+                    <span class="text-xs font-medium text-gray-400">Ostatni Tydzień</span>
+                    <div class="mt-2 flex items-baseline gap-1">
+                        <span id="kpi-weekly-gain-g" class="text-2xl sm:text-3xl font-extrabold text-white">0</span>
+                        <span class="text-xs font-semibold text-gray-400">g</span>
+                    </div>
+                    <span id="kpi-weekly-status" class="text-[11px] text-gray-500 mt-1">Cel: +300 do +500 g/tyg</span>
+                </div>
+
+                <!-- Karta 4: Średnia kcal (7 dni) -->
+                <div class="bg-cardbg border border-borderdark rounded-2xl p-4 flex flex-col justify-between">
+                    <span class="text-xs font-medium text-gray-400">Średnia (ost. 7 dni)</span>
+                    <div class="mt-2 flex items-baseline gap-1">
+                        <span id="kpi-avg-kcal" class="text-2xl sm:text-3xl font-extrabold text-white">0</span>
+                        <span class="text-xs font-semibold text-gray-400">kcal</span>
+                    </div>
+                    <span id="kpi-avg-diff" class="text-[11px] text-gray-500 mt-1">Cel: 3200 kcal</span>
+                </div>
+
+                <!-- Karta 5: Treningi na siłowni -->
+                <div class="col-span-2 lg:col-span-1 bg-cardbg border border-borderdark rounded-2xl p-4 flex flex-col justify-between">
+                    <span class="text-xs font-medium text-gray-400">Treningi (Siłownia)</span>
+                    <div class="mt-2 flex items-baseline gap-1.5">
+                        <span id="kpi-workouts" class="text-2xl sm:text-3xl font-extrabold text-white">0</span>
+                        <span class="text-xs font-semibold text-gray-400">sesji</span>
+                    </div>
+                    <span class="text-[11px] text-gray-500 mt-1">Plan: co 2. dzień</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- Nawigacja Zakładek (Mobile + Desktop) -->
+        <div class="flex bg-cardbg p-1.5 rounded-2xl border border-borderdark">
+            <button onclick="switchTab('daily')" id="tab-btn-daily" class="flex-1 py-2.5 px-4 rounded-xl text-xs sm:text-sm font-bold transition bg-limeaccent text-black shadow">
+                🍽️ Dziennik Dnia
+            </button>
+            <button onclick="switchTab('weekly')" id="tab-btn-weekly" class="flex-1 py-2.5 px-4 rounded-xl text-xs sm:text-sm font-bold transition text-gray-400 hover:text-white">
+                ⚖️ Pomiary Tygodniowe (g)
+            </button>
+            <button onclick="switchTab('checklist')" id="tab-btn-checklist" class="flex-1 py-2.5 px-4 rounded-xl text-xs sm:text-sm font-bold transition text-gray-400 hover:text-white">
+                💊 Suplementy i Zasady
+            </button>
+        </div>
+
+        <!-- ========================================================= -->
+        <!-- ZAKŁADKA 1: DZIENNIK DNIA (KALORIE, MAKRO, TRENING)       -->
+        <!-- ========================================================= -->
+        <div id="tab-daily" class="space-y-6">
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                
+                <!-- Formularz dodawania dnia (5 kolumn) -->
+                <div class="lg:col-span-5 bg-cardbg border border-borderdark rounded-2xl p-5">
+                    <div class="flex items-center justify-between mb-4">
+                        <h2 id="daily-form-title" class="text-base font-bold text-white">Zapisz dzisiejszy wynik</h2>
+                        <button type="button" onclick="fillTargetMacros()" class="text-xs text-limeaccent hover:underline font-medium">
+                            Wpisz 100% celu
+                        </button>
+                    </div>
+
+                    <form id="daily-form" class="space-y-4">
+                        <input type="hidden" id="daily-edit-id">
+                        
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-xs font-medium text-gray-400 mb-1">Data</label>
+                                <input type="date" id="daily-date" required class="w-full bg-darkbg border border-borderdark rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-limeaccent">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-gray-400 mb-1">Kalorie zjedzone (kcal)</label>
+                                <input type="number" id="daily-kcal" placeholder="np. 3210" required min="0" max="15000" class="w-full bg-darkbg border border-borderdark rounded-xl px-3 py-2.5 text-sm font-bold text-limeaccent focus:outline-none focus:border-limeaccent">
+                            </div>
+                        </div>
+
+                        <!-- Makroskładniki -->
+                        <div class="grid grid-cols-3 gap-2.5">
+                            <div>
+                                <label class="block text-xs font-medium text-gray-400 mb-1">Białko (g)</label>
+                                <input type="number" id="daily-protein" placeholder="120" required min="0" class="w-full bg-darkbg border border-borderdark rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-limeaccent">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-gray-400 mb-1">Tłuszcze (g)</label>
+                                <input type="number" id="daily-fat" placeholder="95" required min="0" class="w-full bg-darkbg border border-borderdark rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-limeaccent">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-gray-400 mb-1">Węgle (g)</label>
+                                <input type="number" id="daily-carbs" placeholder="466" required min="0" class="w-full bg-darkbg border border-borderdark rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-limeaccent">
+                            </div>
+                        </div>
+
+                        <!-- Woda i Trening -->
+                        <div class="grid grid-cols-2 gap-3 items-center pt-1">
+                            <div>
+                                <label class="block text-xs font-medium text-gray-400 mb-1">Wypita woda (L)</label>
+                                <input type="number" step="0.1" id="daily-water" placeholder="np. 2.5" value="2.5" class="w-full bg-darkbg border border-borderdark rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-limeaccent">
+                            </div>
+                            <div class="pt-4">
+                                <label class="flex items-center gap-2.5 cursor-pointer bg-darkbg border border-borderdark hover:border-limeaccent/50 rounded-xl p-2.5 transition select-none">
+                                    <input type="checkbox" id="daily-workout" class="w-5 h-5 rounded accent-limeaccent cursor-pointer">
+                                    <span class="text-xs sm:text-sm font-semibold text-white">💪 Siłownia zaliczona</span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-medium text-gray-400 mb-1">Notatka (opcjonalnie)</label>
+                            <input type="text" id="daily-note" placeholder="np. Poszedł szejk 800 kcal, ciężki trening nóg..." class="w-full bg-darkbg border border-borderdark rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-limeaccent">
+                        </div>
+
+                        <div class="flex gap-2 pt-1">
+                            <button type="submit" id="daily-submit-btn" class="flex-1 bg-limeaccent hover:bg-lime-300 text-black font-extrabold py-3 px-4 rounded-xl text-sm transition shadow-lg shadow-limeaccent/10">
+                                + Zapisz Dzień
+                            </button>
+                            <button type="button" id="daily-cancel-edit" onclick="resetDailyForm()" class="hidden bg-gray-800 hover:bg-gray-700 text-gray-300 font-semibold py-3 px-4 rounded-xl text-sm transition">
+                                Anuluj
+                            </button>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- Paski postępu dla wybranego/ostatniego dnia + Historia (7 kolumn) -->
+                <div class="lg:col-span-7 space-y-6">
+                    
+                    <!-- Podgląd realizacji celu dla wpisywanego dnia -->
+                    <div class="bg-cardbg border border-borderdark rounded-2xl p-5">
+                        <div class="flex items-center justify-between mb-3">
+                            <h3 class="text-sm font-bold text-white">Realizacja Celu (Podgląd na żywo)</h3>
+                            <span id="live-status-badge" class="text-xs font-bold px-2.5 py-1 rounded-lg bg-gray-800 text-gray-400">Wpisz dane po lewej</span>
+                        </div>
+
+                        <!-- Główny pasek Kalorii -->
+                        <div class="mb-4">
+                            <div class="flex justify-between text-xs mb-1.5">
+                                <span class="text-gray-300 font-medium">Kalorie</span>
+                                <span class="font-bold text-white"><span id="bar-kcal-val">0</span> / <span id="bar-kcal-target">3200</span> kcal (<span id="bar-kcal-pct">0</span>%)</span>
+                            </div>
+                            <div class="w-full h-3.5 bg-darkbg rounded-full overflow-hidden border border-borderdark">
+                                <div id="bar-kcal-fill" class="h-full bg-limeaccent transition-all duration-300 rounded-full" style="width: 0%"></div>
+                            </div>
+                        </div>
+
+                        <!-- 3 paski Makro -->
+                        <div class="grid grid-cols-3 gap-3">
+                            <div>
+                                <div class="flex justify-between text-[11px] mb-1">
+                                    <span class="text-blue-400 font-semibold">Białko</span>
+                                    <span class="text-gray-300"><span id="bar-p-val">0</span>/<span id="bar-p-target">120</span>g</span>
+                                </div>
+                                <div class="w-full h-2 bg-darkbg rounded-full overflow-hidden">
+                                    <div id="bar-p-fill" class="h-full bg-blue-500 transition-all duration-300" style="width: 0%"></div>
+                                </div>
+                            </div>
+                            <div>
+                                <div class="flex justify-between text-[11px] mb-1">
+                                    <span class="text-amber-400 font-semibold">Tłuszcze</span>
+                                    <span class="text-gray-300"><span id="bar-f-val">0</span>/<span id="bar-f-target">95</span>g</span>
+                                </div>
+                                <div class="w-full h-2 bg-darkbg rounded-full overflow-hidden">
+                                    <div id="bar-f-fill" class="h-full bg-amber-500 transition-all duration-300" style="width: 0%"></div>
+                                </div>
+                            </div>
+                            <div>
+                                <div class="flex justify-between text-[11px] mb-1">
+                                    <span class="text-emerald-400 font-semibold">Węgle</span>
+                                    <span class="text-gray-300"><span id="bar-c-val">0</span>/<span id="bar-c-target">466</span>g</span>
+                                </div>
+                                <div class="w-full h-2 bg-darkbg rounded-full overflow-hidden">
+                                    <div id="bar-c-fill" class="h-full bg-emerald-500 transition-all duration-300" style="width: 0%"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Lista zapisanych dni -->
+                    <div class="bg-cardbg border border-borderdark rounded-2xl p-5">
+                        <div class="flex items-center justify-between mb-4">
+                            <h3 class="text-base font-bold text-white">Historia Dni (<span id="days-count">0</span>)</h3>
+                            <span class="text-xs text-gray-400">Zielony = trafione w cel (+/- 5%)</span>
+                        </div>
+
+                        <div id="daily-list" class="space-y-2.5 max-h-[420px] overflow-y-auto pr-1">
+                            <!-- Wypełniane przez JS -->
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+
+        <!-- ========================================================= -->
+        <!-- ZAKŁADKA 2: POMIARY TYGODNIOWE (WAGA W GRAMACH I WYKRES)  -->
+        <!-- ========================================================= -->
+        <div id="tab-weekly" class="hidden space-y-6">
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                
+                <!-- Formularz pomiaru tygodniowego (4 kolumny) -->
+                <div class="lg:col-span-4 bg-cardbg border border-borderdark rounded-2xl p-5">
+                    <h2 class="text-base font-bold text-white mb-1">Dodaj Pomiar Tygodniowy</h2>
+                    <p class="text-xs text-gray-400 mb-4">Waż się raz w tygodniu: rano, na czczo, po toalecie.</p>
+
+                    <form id="weight-form" class="space-y-4">
+                        <div>
+                            <label class="block text-xs font-medium text-gray-400 mb-1">Data pomiaru</label>
+                            <input type="date" id="weight-date" required class="w-full bg-darkbg border border-borderdark rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-limeaccent">
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-medium text-gray-400 mb-1">Waga poranna (kg) — z dokładnością do 0.1 kg</label>
+                            <input type="number" step="0.05" id="weight-val" placeholder="np. 57.4" required min="30" max="250" class="w-full bg-darkbg border border-borderdark rounded-xl px-3 py-2.5 text-base font-bold text-limeaccent focus:outline-none focus:border-limeaccent">
+                        </div>
+
+                        <div class="pt-2 border-t border-borderdark">
+                            <span class="block text-xs font-semibold text-gray-300 mb-2">Obwody ciała w cm (opcjonalnie)</span>
+                            <div class="grid grid-cols-3 gap-2">
+                                <div>
+                                    <label class="block text-[11px] text-gray-400 mb-1">Biceps</label>
+                                    <input type="number" step="0.5" id="meas-biceps" placeholder="cm" class="w-full bg-darkbg border border-borderdark rounded-xl px-2.5 py-2 text-xs text-white focus:outline-none focus:border-limeaccent">
+                                </div>
+                                <div>
+                                    <label class="block text-[11px] text-gray-400 mb-1">Klatka</label>
+                                    <input type="number" step="0.5" id="meas-chest" placeholder="cm" class="w-full bg-darkbg border border-borderdark rounded-xl px-2.5 py-2 text-xs text-white focus:outline-none focus:border-limeaccent">
+                                </div>
+                                <div>
+                                    <label class="block text-[11px] text-gray-400 mb-1">Pas (pępek)</label>
+                                    <input type="number" step="0.5" id="meas-waist" placeholder="cm" class="w-full bg-darkbg border border-borderdark rounded-xl px-2.5 py-2 text-xs text-white focus:outline-none focus:border-limeaccent">
+                                </div>
+                            </div>
+                        </div>
+
+                        <button type="submit" class="w-full bg-limeaccent hover:bg-lime-300 text-black font-extrabold py-3 px-4 rounded-xl text-sm transition shadow-lg shadow-limeaccent/10">
+                            + Zapisz Pomiar Wagi
+                        </button>
+                    </form>
+                </div>
+
+                <!-- Wykres i Tabela Tygodniowa (8 kolumn) -->
+                <div class="lg:col-span-8 space-y-6">
+                    <!-- Wykres -->
+                    <div class="bg-cardbg border border-borderdark rounded-2xl p-5">
+                        <div class="flex items-center justify-between mb-3">
+                            <h3 class="text-base font-bold text-white">Wykres Przyrostu Masy (kg)</h3>
+                            <span class="text-xs text-limeaccent font-medium">Zdrowe tempo: +300 do +500 g / tydzień</span>
+                        </div>
+                        <div class="relative h-56 w-full">
+                            <canvas id="weightChart"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Tabela z przyrostem w GRAMACH -->
+                    <div class="bg-cardbg border border-borderdark rounded-2xl p-5">
+                        <h3 class="text-base font-bold text-white mb-4">Historia Pomiarów (Przyrost w gramach)</h3>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left border-collapse">
+                                <thead>
+                                    <tr class="border-b border-borderdark text-[11px] uppercase text-gray-400">
+                                        <th class="py-2.5 px-2">Tydzień / Data</th>
+                                        <th class="py-2.5 px-2">Waga</th>
+                                        <th class="py-2.5 px-2">Zmiana (tydz.)</th>
+                                        <th class="py-2.5 px-2">Od startu</th>
+                                        <th class="py-2.5 px-2">Obwody (B/K/P)</th>
+                                        <th class="py-2.5 px-2 text-right">Akcja</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="weight-table-body" class="divide-y divide-borderdark text-xs sm:text-sm">
+                                    <!-- Wypełniane przez JS -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ========================================================= -->
+        <!-- ZAKŁADKA 3: CODZIENNA CHECKLISTA SUPLEMENTÓW I ZASAD      -->
+        <!-- ========================================================= -->
+        <div id="tab-checklist" class="hidden space-y-6">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                
+                <!-- Dzienna Checklista -->
+                <div class="bg-cardbg border border-borderdark rounded-2xl p-5">
+                    <div class="flex items-center justify-between mb-4">
+                        <div>
+                            <h2 class="text-base font-bold text-white">Codzienna Checklista na Masę</h2>
+                            <p class="text-xs text-gray-400">Odklikuj codziennie, żeby nie gubić kalorii i regeneracji.</p>
+                        </div>
+                        <button onclick="resetDailyChecklist()" class="text-xs text-gray-400 hover:text-limeaccent underline">Resetuj na nowy dzień</button>
+                    </div>
+
+                    <div id="checklist-items" class="space-y-2.5">
+                        <!-- Renderowane przez JS -->
+                    </div>
+                </div>
+
+                <!-- Ściąga z makro i mikroskładników -->
+                <div class="bg-cardbg border border-borderdark rounded-2xl p-5 space-y-4">
+                    <h2 class="text-base font-bold text-white">Twoja ściąga z zasad (17 lat / 180 cm)</h2>
+                    
+                    <div class="p-3.5 rounded-xl bg-darkbg border border-borderdark space-y-1.5">
+                        <h3 class="text-xs font-bold text-limeaccent uppercase">1. Zasada Suchej Wagi</h3>
+                        <p class="text-xs text-gray-300 leading-relaxed">
+                            Ryż, makaron, płatki owsiane i mięso ważysz <strong>zawsze przed ugotowaniem/usmażeniem</strong>. 100 g suchego ryżu to 350 kcal, ugotowanego tylko 130 kcal.
+                        </p>
+                    </div>
+
+                    <div class="p-3.5 rounded-xl bg-darkbg border border-borderdark space-y-1.5">
+                        <h3 class="text-xs font-bold text-blue-400 uppercase">2. Witaminy i Suplementy</h3>
+                        <ul class="text-xs text-gray-300 space-y-1 list-disc list-inside">
+                            <li><strong>Witamina D3 (2000 IU):</strong> Bierz codziennie do posiłku z tłuszczem (jajka, obiad).</li>
+                            <li><strong>Magnez (cytrynian/diglicynian 200-400 mg):</strong> Wieczorem przed snem dla lepszej regeneracji.</li>
+                            <li><strong>Kreatyna Monohydrat (5 g):</strong> Codziennie (również w dni bez siłowni) z wodą.</li>
+                        </ul>
+                    </div>
+
+                    <div class="p-3.5 rounded-xl bg-darkbg border border-borderdark space-y-1.5">
+                        <h3 class="text-xs font-bold text-amber-400 uppercase">3. Kiedy podbić kalorie?</h3>
+                        <p class="text-xs text-gray-300 leading-relaxed">
+                            Jeśli po <strong>pełnych 2 tygodniach</strong> trzymania 3200 kcal waga nie wzrośnie nawet o <strong>+300 g</strong>, wejdź w przycisk <em>"Cele"</em> u góry i podnieś kalorie do <strong>3450 kcal</strong>.
+                        </p>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Stopka -->
+    <footer class="border-t border-borderdark py-4 px-4 text-center text-xs text-gray-500">
+        EliteTracker • Dane zapisują się automatycznie w pamięci Twojej przeglądarki (LocalStorage). Korzystaj z "Eksport CSV", aby robić kopie zapasowe.
+    </footer>
+
+    <!-- LOGIKA APLIKACJI -->
+    <script>
+        // Domyślna konfiguracja dla użytkownika (17 lat, 180 cm, 57 kg)
+        const DEFAULT_GOALS = {
+            startWeight: 57.0,
+            kcal: 3200,
+            protein: 120,
+            fat: 95,
+            carbs: 466
+        };
+
+        const DEFAULT_CHECKLIST = [
+            { id: 'c1', text: 'Ważenie produktów PRZED ugotowaniem (na sucho)', done: false },
+            { id: 'c2', text: 'Witamina D3 2000 IU (do posiłku z tłuszczem)', done: false },
+            { id: 'c3', text: 'Magnez (cytrynian/diglicynian) wieczorem', done: false },
+            { id: 'c4', text: 'Kreatyna monohydrat 5 g (opcjonalnie)', done: false },
+            { id: 'c5', text: 'Wypite minimum 2,5 litra wody', done: false },
+            { id: 'c6', text: 'Wypity szejk kaloryczny lub dodana oliwa do obiadu', done: false }
+        ];
+
+        // Stan aplikacji
+        let appState = {
+            goals: { ...DEFAULT_GOALS },
+            dailyLogs: [],
+            weightLogs: [],
+            checklist: JSON.parse(JSON.stringify(DEFAULT_CHECKLIST)),
+            isSampleData: false
+        };
+
+        let weightChartInstance = null;
+
+        // Inicjalizacja po załadowaniu strony
+        window.addEventListener('DOMContentLoaded', () => {
+            loadState();
+            setTodayDates();
+            bindEvents();
+            renderAll();
+            registerServiceWorker();
+        });
+
+        // Rejestracja Service Workera w locie dla PWA
+        function registerServiceWorker() {
+            if ('serviceWorker' in navigator) {
+                const swCode = `
+                    self.addEventListener('install', (e) => e.waitUntil(self.skipWaiting()));
+                    self.addEventListener('activate', (e) => e.waitUntil(self.clients.claim()));
+                    self.addEventListener('fetch', (e) => {
+                        e.respondWith(fetch(e.request).catch(() => caches.match(e.request)));
+                    });
+                `;
+                const blob = new Blob([swCode], { type: 'text/javascript' });
+                const swUrl = URL.createObjectURL(blob);
+                navigator.serviceWorker.register(swUrl).catch(() => {});
+            }
+        }
+
+        function getTodayStr() {
+            const now = new Date();
+            const offset = now.getTimezoneOffset() * 60000;
+            return new Date(now - offset).toISOString().split('T')[0];
+        }
+
+        function setTodayDates() {
+            const today = getTodayStr();
+            document.getElementById('daily-date').value = today;
+            document.getElementById('weight-date').value = today;
+        }
+
+        // Wczytywanie i zapisywanie w LocalStorage
+        function loadState() {
+            const saved = localStorage.getItem('masaTrackerData_v1');
+            if (saved) {
+                try {
+                    const parsed = JSON.parse(saved);
+                    appState = {
+                        goals: { ...DEFAULT_GOALS, ...parsed.goals },
+                        dailyLogs: parsed.dailyLogs || [],
+                        weightLogs: parsed.weightLogs || [],
+                        checklist: parsed.checklist || JSON.parse(JSON.stringify(DEFAULT_CHECKLIST)),
+                        isSampleData: parsed.isSampleData || false
+                    };
+                } catch (e) {
+                    console.error('Błąd odczytu danych:', e);
+                    initSampleData();
+                }
+            } else {
+                initSampleData();
+            }
+        }
+
+        function saveState() {
+            localStorage.setItem('masaTrackerData_v1', JSON.stringify(appState));
+        }
+
+        // Dane startowe na dobry początek
+        function initSampleData() {
+            const today = getTodayStr();
+            appState = {
+                goals: { ...DEFAULT_GOALS },
+                dailyLogs: [
+                    {
+                        id: 'sample-1',
+                        date: today,
+                        kcal: 3220,
+                        protein: 122,
+                        fat: 96,
+                        carbs: 467,
+                        water: 2.5,
+                        workout: true,
+                        note: 'Start planu! Szejk owsiano-bananowy wszedł gładko.'
+                    }
+                ],
+                weightLogs: [
+                    {
+                        id: 'w-start',
+                        date: today,
+                        weight: 57.0,
+                        biceps: '',
+                        chest: '',
+                        waist: ''
+                    }
+                ],
+                checklist: JSON.parse(JSON.stringify(DEFAULT_CHECKLIST)),
+                isSampleData: true
+            };
+            saveState();
+        }
+
+        function clearSampleData() {
+            appState.dailyLogs = [];
+            appState.weightLogs = [
+                {
+                    id: 'w-init-' + Date.now(),
+                    date: getTodayStr(),
+                    weight: appState.goals.startWeight,
+                    biceps: '',
+                    chest: '',
+                    waist: ''
+                }
+            ];
+            appState.isSampleData = false;
+            saveState();
+            renderAll();
+            showToast('Wyczyszczono przykład. Masz czysty start z wagą ' + appState.goals.startWeight + ' kg!', 'success');
+        }
+
+        // Podpięcie zdarzeń
+        function bindEvents() {
+            // Podgląd pasków na żywo podczas wpisywania w formularzu dnia
+            ['daily-kcal', 'daily-protein', 'daily-fat', 'daily-carbs'].forEach(id => {
+                document.getElementById(id).addEventListener('input', updateLiveBars);
+            });
+
+            // Zapis dnia
+            document.getElementById('daily-form').addEventListener('submit', (e) => {
+                e.preventDefault();
+                saveDailyEntry();
+            });
+
+            // Zapis pomiaru wagi
+            document.getElementById('weight-form').addEventListener('submit', (e) => {
+                e.preventDefault();
+                saveWeightEntry();
+            });
+
+            // Zapis edycji celów
+            document.getElementById('goals-form').addEventListener('submit', (e) => {
+                e.preventDefault();
+                appState.goals.startWeight = parseFloat(document.getElementById('goal-start-weight').value) || 57.0;
+                appState.goals.kcal = parseInt(document.getElementById('goal-kcal').value) || 3200;
+                appState.goals.protein = parseInt(document.getElementById('goal-protein').value) || 120;
+                appState.goals.fat = parseInt(document.getElementById('goal-fat').value) || 95;
+                appState.goals.carbs = parseInt(document.getElementById('goal-carbs').value) || 466;
+                saveState();
+                closeGoalsModal();
+                renderAll();
+                showToast('Zaktualizowano Twoje cele dzienne!', 'success');
+            });
+        }
+
+        // Przełączanie zakładek
+        function switchTab(tabName) {
+            ['daily', 'weekly', 'checklist'].forEach(t => {
+                const section = document.getElementById('tab-' + t);
+                const btn = document.getElementById('tab-btn-' + t);
+                if (t === tabName) {
+                    section.classList.remove('hidden');
+                    btn.classList.add('bg-limeaccent', 'text-black', 'shadow');
+                    btn.classList.remove('text-gray-400', 'hover:text-white');
+                } else {
+                    section.classList.add('hidden');
+                    btn.classList.remove('bg-limeaccent', 'text-black', 'shadow');
+                    btn.classList.add('text-gray-400', 'hover:text-white');
+                }
+            });
+
+            if (tabName === 'weekly') {
+                renderWeightChart();
+            }
+        }
+
+        // Szybkie wypełnienie 100% celu w formularzu
+        function fillTargetMacros() {
+            document.getElementById('daily-kcal').value = appState.goals.kcal;
+            document.getElementById('daily-protein').value = appState.goals.protein;
+            document.getElementById('daily-fat').value = appState.goals.fat;
+            document.getElementById('daily-carbs').value = appState.goals.carbs;
+            updateLiveBars();
+        }
+
+        // Aktualizacja pasków postępu na żywo
+        function updateLiveBars() {
+            const kcal = parseFloat(document.getElementById('daily-kcal').value) || 0;
+            const p = parseFloat(document.getElementById('daily-protein').value) || 0;
+            const f = parseFloat(document.getElementById('daily-fat').value) || 0;
+            const c = parseFloat(document.getElementById('daily-carbs').value) || 0;
+
+            const tKcal = appState.goals.kcal;
+            const tP = appState.goals.protein;
+            const tF = appState.goals.fat;
+            const tC = appState.goals.carbs;
+
+            document.getElementById('bar-kcal-val').textContent = Math.round(kcal);
+            document.getElementById('bar-kcal-target').textContent = tKcal;
+            const pct = Math.round((kcal / tKcal) * 100);
+            document.getElementById('bar-kcal-pct').textContent = pct;
+
+            const fillEl = document.getElementById('bar-kcal-fill');
+            const badgeEl = document.getElementById('live-status-badge');
+            fillEl.style.width = Math.min(pct, 100) + '%';
+
+            // Kolorowanie statusu
+            if (kcal === 0) {
+                fillEl.className = 'h-full bg-gray-600 transition-all duration-300 rounded-full';
+                badgeEl.className = 'text-xs font-bold px-2.5 py-1 rounded-lg bg-gray-800 text-gray-400';
+                badgeEl.textContent = 'Wpisz kalorie';
+            } else if (pct >= 95 && pct <= 115) {
+                fillEl.className = 'h-full bg-limeaccent transition-all duration-300 rounded-full';
+                badgeEl.className = 'text-xs font-bold px-2.5 py-1 rounded-lg bg-limeaccent/20 text-limeaccent';
+                badgeEl.textContent = '🔥 Idealnie w cel!';
+            } else if (pct >= 85 && pct < 95) {
+                fillEl.className = 'h-full bg-amber-400 transition-all duration-300 rounded-full';
+                badgeEl.className = 'text-xs font-bold px-2.5 py-1 rounded-lg bg-amber-500/20 text-amber-300';
+                badgeEl.textContent = 'Blisko celu (dorzuć przekąskę)';
+            } else if (pct > 115) {
+                fillEl.className = 'h-full bg-emerald-400 transition-all duration-300 rounded-full';
+                badgeEl.className = 'text-xs font-bold px-2.5 py-1 rounded-lg bg-emerald-500/20 text-emerald-300';
+                badgeEl.textContent = 'Solidna nadwyżka +';
+            } else {
+                fillEl.className = 'h-full bg-red-500 transition-all duration-300 rounded-full';
+                badgeEl.className = 'text-xs font-bold px-2.5 py-1 rounded-lg bg-red-500/20 text-red-400';
+                badgeEl.textContent = 'Za mało kalorii!';
+            }
+
+            // Makro paski
+            document.getElementById('bar-p-val').textContent = Math.round(p);
+            document.getElementById('bar-p-target').textContent = tP;
+            document.getElementById('bar-p-fill').style.width = Math.min((p / tP) * 100, 100) + '%';
+
+            document.getElementById('bar-f-val').textContent = Math.round(f);
+            document.getElementById('bar-f-target').textContent = tF;
+            document.getElementById('bar-f-fill').style.width = Math.min((f / tF) * 100, 100) + '%';
+
+            document.getElementById('bar-c-val').textContent = Math.round(c);
+            document.getElementById('bar-c-target').textContent = tC;
+            document.getElementById('bar-c-fill').style.width = Math.min((c / tC) * 100, 100) + '%';
+        }
+
+        // Zapisywanie / Edycja wpisu dziennego
+        function saveDailyEntry() {
+            const editId = document.getElementById('daily-edit-id').value;
+            const date = document.getElementById('daily-date').value;
+            const kcal = parseInt(document.getElementById('daily-kcal').value) || 0;
+            const protein = parseInt(document.getElementById('daily-protein').value) || 0;
+            const fat = parseInt(document.getElementById('daily-fat').value) || 0;
+            const carbs = parseInt(document.getElementById('daily-carbs').value) || 0;
+            const water = parseFloat(document.getElementById('daily-water').value) || 0;
+            const workout = document.getElementById('daily-workout').checked;
+            const note = document.getElementById('daily-note').value.trim();
+
+            if (editId) {
+                const idx = appState.dailyLogs.findIndex(item => item.id === editId);
+                if (idx !== -1) {
+                    appState.dailyLogs[idx] = { id: editId, date, kcal, protein, fat, carbs, water, workout, note };
+                    showToast('Zaktualizowano wpis z dnia ' + formatDatePL(date), 'success');
+                }
+            } else {
+                const existingIdx = appState.dailyLogs.findIndex(item => item.date === date);
+                if (existingIdx !== -1) {
+                    appState.dailyLogs[existingIdx] = {
+                        id: appState.dailyLogs[existingIdx].id,
+                        date, kcal, protein, fat, carbs, water, workout, note
+                    };
+                    showToast('Nadpisano wpis dla daty ' + formatDatePL(date), 'info');
+                } else {
+                    appState.dailyLogs.push({
+                        id: 'day-' + Date.now(),
+                        date, kcal, protein, fat, carbs, water, workout, note
+                    });
+                    showToast('Zapisano dzień (' + kcal + ' kcal)!', 'success');
+                }
+            }
+
+            appState.dailyLogs.sort((a, b) => b.date.localeCompare(a.date));
+            appState.isSampleData = false;
+            saveState();
+            resetDailyForm();
+            renderAll();
+        }
+
+        function editDailyEntry(id) {
+            const item = appState.dailyLogs.find(d => d.id === id);
+            if (!item) return;
+
+            document.getElementById('daily-edit-id').value = item.id;
+            document.getElementById('daily-date').value = item.date;
+            document.getElementById('daily-kcal').value = item.kcal;
+            document.getElementById('daily-protein').value = item.protein;
+            document.getElementById('daily-fat').value = item.fat;
+            document.getElementById('daily-carbs').value = item.carbs;
+            document.getElementById('daily-water').value = item.water;
+            document.getElementById('daily-workout').checked = item.workout;
+            document.getElementById('daily-note').value = item.note || '';
+
+            document.getElementById('daily-form-title').textContent = 'Edytujesz dzień: ' + formatDatePL(item.date);
+            document.getElementById('daily-submit-btn').textContent = 'Zapisz Zmiany';
+            document.getElementById('daily-cancel-edit').classList.remove('hidden');
+
+            updateLiveBars();
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        function resetDailyForm() {
+            document.getElementById('daily-edit-id').value = '';
+            document.getElementById('daily-date').value = getTodayStr();
+            document.getElementById('daily-kcal').value = '';
+            document.getElementById('daily-protein').value = '';
+            document.getElementById('daily-fat').value = '';
+            document.getElementById('daily-carbs').value = '';
+            document.getElementById('daily-water').value = '2.5';
+            document.getElementById('daily-workout').checked = false;
+            document.getElementById('daily-note').value = '';
+
+            document.getElementById('daily-form-title').textContent = 'Zapisz dzisiejszy wynik';
+            document.getElementById('daily-submit-btn').textContent = '+ Zapisz Dzień';
+            document.getElementById('daily-cancel-edit').classList.add('hidden');
+            updateLiveBars();
+        }
+
+        function deleteDailyEntry(id) {
+            openConfirmModal('Usuń wpis dzienny', 'Czy na pewno chcesz usunąć ten dzień z historii?', () => {
+                appState.dailyLogs = appState.dailyLogs.filter(d => d.id !== id);
+                saveState();
+                renderAll();
+                showToast('Usunięto wpis dzienny.', 'info');
+            });
+        }
+
+        // Zapisywanie pomiaru tygodniowego
+        function saveWeightEntry() {
+            const date = document.getElementById('weight-date').value;
+            const weight = parseFloat(document.getElementById('weight-val').value);
+            const biceps = document.getElementById('meas-biceps').value;
+            const chest = document.getElementById('meas-chest').value;
+            const waist = document.getElementById('meas-waist').value;
+
+            if (!weight || isNaN(weight)) return;
+
+            const existingIdx = appState.weightLogs.findIndex(w => w.date === date);
+            if (existingIdx !== -1) {
+                appState.weightLogs[existingIdx] = {
+                    ...appState.weightLogs[existingIdx],
+                    weight, biceps, chest, waist
+                };
+                showToast('Zaktualizowano pomiar z dnia ' + formatDatePL(date), 'info');
+            } else {
+                appState.weightLogs.push({
+                    id: 'w-' + Date.now(),
+                    date, weight, biceps, chest, waist
+                });
+                showToast('Zapisano nową wagę: ' + weight.toFixed(1) + ' kg!', 'success');
+            }
+
+            appState.weightLogs.sort((a, b) => a.date.localeCompare(b.date));
+            appState.isSampleData = false;
+            saveState();
+
+            document.getElementById('weight-val').value = '';
+            document.getElementById('meas-biceps').value = '';
+            document.getElementById('meas-chest').value = '';
+            document.getElementById('meas-waist').value = '';
+
+            renderAll();
+        }
+
+        function deleteWeightEntry(id) {
+            openConfirmModal('Usuń pomiar wagi', 'Czy na pewno chcesz usunąć ten pomiar z tabeli?', () => {
+                appState.weightLogs = appState.weightLogs.filter(w => w.id !== id);
+                saveState();
+                renderAll();
+                showToast('Usunięto pomiar wagi.', 'info');
+            });
+        }
+
+        // Renderowanie całego interfejsu
+        function renderAll() {
+            const banner = document.getElementById('sample-banner');
+            if (appState.isSampleData) {
+                banner.classList.remove('hidden');
+            } else {
+                banner.classList.add('hidden');
+            }
+
+            document.getElementById('header-target-kcal').textContent = appState.goals.kcal + ' kcal';
+            document.getElementById('header-start-weight').textContent = appState.goals.startWeight.toFixed(1) + ' kg';
+
+            updateLiveBars();
+            renderKPIs();
+            renderDailyList();
+            renderWeightTable();
+            renderWeightChart();
+            renderChecklist();
+        }
+
+        // Obliczanie i wyświetlanie głównych kart KPI
+        function renderKPIs() {
+            const startW = appState.goals.startWeight;
+            const sortedWeights = [...appState.weightLogs].sort((a, b) => a.date.localeCompare(b.date));
+
+            let currentW = startW;
+            let lastDateStr = 'Waga startowa';
+            let weeklyDiffGrams = 0;
+
+            if (sortedWeights.length > 0) {
+                const latest = sortedWeights[sortedWeights.length - 1];
+                currentW = latest.weight;
+                lastDateStr = 'Pomiar: ' + formatDatePL(latest.date);
+
+                if (sortedWeights.length >= 2) {
+                    const prev = sortedWeights[sortedWeights.length - 2];
+                    weeklyDiffGrams = Math.round((latest.weight - prev.weight) * 1000);
+                } else {
+                    weeklyDiffGrams = Math.round((latest.weight - startW) * 1000);
+                }
+            }
+
+            const totalDiffKg = currentW - startW;
+            const totalDiffGrams = Math.round(totalDiffKg * 1000);
+
+            document.getElementById('kpi-current-weight').textContent = currentW.toFixed(1);
+            document.getElementById('kpi-weight-date').textContent = lastDateStr;
+
+            const totalKgEl = document.getElementById('kpi-total-gain-kg');
+            const totalGEl = document.getElementById('kpi-total-gain-g');
+            const signTotal = totalDiffGrams > 0 ? '+' : '';
+            totalKgEl.textContent = signTotal + totalDiffKg.toFixed(2);
+            totalGEl.textContent = `${signTotal}${totalDiffGrams} g od startu`;
+
+            if (totalDiffGrams > 0) {
+                totalKgEl.className = 'text-2xl sm:text-3xl font-extrabold text-limeaccent';
+            } else if (totalDiffGrams < 0) {
+                totalKgEl.className = 'text-2xl sm:text-3xl font-extrabold text-red-400';
+            } else {
+                totalKgEl.className = 'text-2xl sm:text-3xl font-extrabold text-white';
+            }
+
+            const weekGEl = document.getElementById('kpi-weekly-gain-g');
+            const weekStatusEl = document.getElementById('kpi-weekly-status');
+            const signWeek = weeklyDiffGrams > 0 ? '+' : '';
+            weekGEl.textContent = signWeek + weeklyDiffGrams;
+
+            if (weeklyDiffGrams >= 250) {
+                weekGEl.className = 'text-2xl sm:text-3xl font-extrabold text-limeaccent';
+                weekStatusEl.textContent = 'Świetne tempo wzrostu!';
+                weekStatusEl.className = 'text-[11px] text-limeaccent/80 mt-1';
+            } else if (weeklyDiffGrams > 0) {
+                weekGEl.className = 'text-2xl sm:text-3xl font-extrabold text-emerald-400';
+                weekStatusEl.textContent = 'Waga idzie w górę +';
+                weekStatusEl.className = 'text-[11px] text-emerald-400/80 mt-1';
+            } else if (weeklyDiffGrams < 0) {
+                weekGEl.className = 'text-2xl sm:text-3xl font-extrabold text-red-400';
+                weekStatusEl.textContent = 'Spadek — jedz więcej!';
+                weekStatusEl.className = 'text-[11px] text-red-400 mt-1';
+            } else {
+                weekGEl.className = 'text-2xl sm:text-3xl font-extrabold text-white';
+                weekStatusEl.textContent = 'Cel: +300 do +500 g/tyg';
+                weekStatusEl.className = 'text-[11px] text-gray-500 mt-1';
+            }
+
+            const recent7 = appState.dailyLogs.slice(0, 7);
+            let avgKcal = 0;
+            if (recent7.length > 0) {
+                const sum = recent7.reduce((acc, item) => acc + item.kcal, 0);
+                avgKcal = Math.round(sum / recent7.length);
+            }
+            document.getElementById('kpi-avg-kcal').textContent = avgKcal;
+            const avgDiffEl = document.getElementById('kpi-avg-diff');
+            if (avgKcal === 0) {
+                avgDiffEl.textContent = 'Cel: ' + appState.goals.kcal + ' kcal';
+            } else {
+                const diff = avgKcal - appState.goals.kcal;
+                avgDiffEl.textContent = (diff >= 0 ? '+' : '') + diff + ' kcal względem celu';
+                avgDiffEl.className = diff >= -100 ? 'text-[11px] text-limeaccent/80 mt-1' : 'text-[11px] text-amber-400 mt-1';
+            }
+
+            const workoutsCount = appState.dailyLogs.filter(d => d.workout).length;
+            document.getElementById('kpi-workouts').textContent = workoutsCount;
+        }
+
+        function renderDailyList() {
+            const container = document.getElementById('daily-list');
+            document.getElementById('days-count').textContent = appState.dailyLogs.length;
+
+            if (appState.dailyLogs.length === 0) {
+                container.innerHTML = `
+                    <div class="text-center py-8 text-gray-500 text-sm border border-dashed border-borderdark rounded-xl">
+                        Brak zapisanych dni. Wpisz swój dzisiejszy wynik w formularzu obok!
+                    </div>
+                `;
+                return;
+            }
+
+            const tKcal = appState.goals.kcal;
+
+            container.innerHTML = appState.dailyLogs.map(day => {
+                const pct = Math.round((day.kcal / tKcal) * 100);
+                let badgeColor = 'bg-red-500/20 text-red-400 border-red-500/30';
+                if (pct >= 95) {
+                    badgeColor = 'bg-limeaccent/20 text-limeaccent border-limeaccent/30';
+                } else if (pct >= 85) {
+                    badgeColor = 'bg-amber-500/20 text-amber-300 border-amber-500/30';
+                }
+
+                return `
+                    <div class="bg-darkbg border border-borderdark hover:border-gray-700 rounded-xl p-3.5 transition flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div class="space-y-1">
+                            <div class="flex flex-wrap items-center gap-2">
+                                <span class="font-bold text-white text-sm">${formatDatePL(day.date)}</span>
+                                <span class="text-xs font-extrabold px-2 py-0.5 rounded-md border ${badgeColor}">
+                                    ${day.kcal} kcal (${pct}%)
+                                </span>
+                                ${day.workout ? '<span class="text-[11px] font-semibold px-2 py-0.5 rounded-md bg-blue-500/20 text-blue-300 border border-blue-500/30">💪 Siłownia</span>' : ''}
+                            </div>
+                            <div class="flex flex-wrap gap-3 text-xs text-gray-400">
+                                <span>B: <strong class="text-blue-400">${day.protein}g</strong></span>
+                                <span>T: <strong class="text-amber-400">${day.fat}g</strong></span>
+                                <span>W: <strong class="text-emerald-400">${day.carbs}g</strong></span>
+                                <span>💧 ${day.water || 0} L</span>
+                            </div>
+                            ${day.note ? `<p class="text-xs text-gray-400 italic pt-0.5">"${escapeHtml(day.note)}"</p>` : ''}
+                        </div>
+
+                        <div class="flex items-center gap-2 self-end sm:self-center">
+                            <button onclick="editDailyEntry('${day.id}')" class="px-2.5 py-1.5 rounded-lg bg-cardbg hover:bg-gray-800 text-gray-300 text-xs font-medium border border-borderdark transition">
+                                Edytuj
+                            </button>
+                            <button onclick="deleteDailyEntry('${day.id}')" class="px-2.5 py-1.5 rounded-lg bg-cardbg hover:bg-red-950/60 text-red-400 text-xs font-medium border border-borderdark transition">
+                                Usuń
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function renderWeightTable() {
+            const tbody = document.getElementById('weight-table-body');
+            const sorted = [...appState.weightLogs].sort((a, b) => a.date.localeCompare(b.date));
+            const startW = appState.goals.startWeight;
+
+            if (sorted.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="6" class="py-6 text-center text-gray-500">Brak pomiarów wagi. Dodaj pierwszy pomiar poranny!</td></tr>`;
+                return;
+            }
+
+            const enriched = sorted.map((entry, index) => {
+                const prevWeight = index === 0 ? startW : sorted[index - 1].weight;
+                const weekDiffGrams = Math.round((entry.weight - prevWeight) * 1000);
+                const totalDiffGrams = Math.round((entry.weight - startW) * 1000);
+                return {
+                    ...entry,
+                    weekNum: index,
+                    weekDiffGrams,
+                    totalDiffGrams
+                };
+            }).reverse();
+
+            tbody.innerHTML = enriched.map(row => {
+                const wSign = row.weekDiffGrams > 0 ? '+' : '';
+                const tSign = row.totalDiffGrams > 0 ? '+' : '';
+                
+                let weekBadge = 'text-gray-400';
+                if (row.weekDiffGrams > 0) weekBadge = 'text-limeaccent font-bold';
+                if (row.weekDiffGrams < 0) weekBadge = 'text-red-400 font-bold';
+
+                const measStr = [
+                    row.biceps ? `B:${row.biceps}` : '',
+                    row.chest ? `K:${row.chest}` : '',
+                    row.waist ? `P:${row.waist}` : ''
+                ].filter(Boolean).join(' / ') || '—';
+
+                return `
+                    <tr class="hover:bg-darkbg/60 transition">
+                        <td class="py-3 px-2">
+                            <div class="font-bold text-white">Tydzień ${row.weekNum}</div>
+                            <div class="text-[11px] text-gray-400">${formatDatePL(row.date)}</div>
+                        </td>
+                        <td class="py-3 px-2 font-extrabold text-white text-sm">${row.weight.toFixed(1)} kg</td>
+                        <td class="py-3 px-2 ${weekBadge}">${row.weekNum === 0 && row.weekDiffGrams === 0 ? 'Start' : `${wSign}${row.weekDiffGrams} g`}</td>
+                        <td class="py-3 px-2 font-semibold ${row.totalDiffGrams >= 0 ? 'text-emerald-400' : 'text-red-400'}">
+                            ${tSign}${row.totalDiffGrams} g
+                        </td>
+                        <td class="py-3 px-2 text-xs text-gray-400">${measStr}</td>
+                        <td class="py-3 px-2 text-right">
+                            <button onclick="deleteWeightEntry('${row.id}')" class="text-red-400 hover:text-red-300 text-xs font-medium px-2 py-1 rounded hover:bg-red-950/50">
+                                Usuń
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        function renderWeightChart() {
+            const ctx = document.getElementById('weightChart');
+            if (!ctx) return;
+
+            const sorted = [...appState.weightLogs].sort((a, b) => a.date.localeCompare(b.date));
+            const labels = sorted.map((item, idx) => `Tydz. ${idx} (${item.date.slice(5)})`);
+            const dataPoints = sorted.map(item => item.weight);
+
+            if (weightChartInstance) {
+                weightChartInstance.destroy();
+            }
+
+            weightChartInstance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels.length ? labels : ['Start'],
+                    datasets: [{
+                        label: 'Waga poranna (kg)',
+                        data: dataPoints.length ? dataPoints : [appState.goals.startWeight],
+                        borderColor: '#a3e635',
+                        backgroundColor: 'rgba(163, 230, 53, 0.12)',
+                        borderWidth: 3,
+                        pointBackgroundColor: '#a3e635',
+                        pointBorderColor: '#0f1210',
+                        pointBorderWidth: 2,
+                        pointRadius: 5,
+                        pointHoverRadius: 7,
+                        fill: true,
+                        tension: 0.3
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            backgroundColor: '#181c19',
+                            titleColor: '#fff',
+                            bodyColor: '#a3e635',
+                            borderColor: '#2a322c',
+                            borderWidth: 1,
+                            padding: 10,
+                            callbacks: {
+                                label: function(context) {
+                                    return ` Waga: ${context.parsed.y.toFixed(1)} kg`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            grid: { color: '#2a322c' },
+                            ticks: { color: '#9ca3af', font: { size: 11 } }
+                        },
+                        y: {
+                            grid: { color: '#2a322c' },
+                            ticks: {
+                                color: '#9ca3af',
+                                font: { size: 11 },
+                                callback: val => val.toFixed(1) + ' kg'
+                            },
+                            suggestedMin: Math.max(40, appState.goals.startWeight - 1),
+                            suggestedMax: appState.goals.startWeight + 4
+                        }
+                    }
+                }
+            });
+        }
+
+        function renderChecklist() {
+            const container = document.getElementById('checklist-items');
+            container.innerHTML = appState.checklist.map(item => `
+                <label class="flex items-center gap-3 p-3 rounded-xl bg-darkbg border ${item.done ? 'border-limeaccent/40 bg-limeaccent/5' : 'border-borderdark'} cursor-pointer transition select-none">
+                    <input type="checkbox" ${item.done ? 'checked' : ''} onchange="toggleChecklist('${item.id}')" class="w-5 h-5 rounded accent-limeaccent cursor-pointer">
+                    <span class="text-xs sm:text-sm ${item.done ? 'line-through text-gray-500' : 'text-gray-200 font-medium'}">${escapeHtml(item.text)}</span>
+                </label>
+            `).join('');
+        }
+
+        function toggleChecklist(id) {
+            const item = appState.checklist.find(c => c.id === id);
+            if (item) {
+                item.done = !item.done;
+                saveState();
+                renderChecklist();
+            }
+        }
+
+        function resetDailyChecklist() {
+            appState.checklist.forEach(c => c.done = false);
+            saveState();
+            renderChecklist();
+            showToast('Zresetowano checklistę na nowy dzień!', 'info');
+        }
+
+        function openGoalsModal() {
+            document.getElementById('goal-start-weight').value = appState.goals.startWeight;
+            document.getElementById('goal-kcal').value = appState.goals.kcal;
+            document.getElementById('goal-protein').value = appState.goals.protein;
+            document.getElementById('goal-fat').value = appState.goals.fat;
+            document.getElementById('goal-carbs').value = appState.goals.carbs;
+
+            const modal = document.getElementById('goals-modal');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+
+        function closeGoalsModal() {
+            const modal = document.getElementById('goals-modal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
+
+        function openConfirmModal(title, desc, onConfirm) {
+            document.getElementById('modal-title').textContent = title;
+            document.getElementById('modal-desc').textContent = desc;
+            const modal = document.getElementById('confirm-modal');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+
+            const confirmBtn = document.getElementById('modal-confirm');
+            const cancelBtn = document.getElementById('modal-cancel');
+
+            const cleanup = () => {
+                modal.classList.add('hidden');
+                modal.classList.remove('flex');
+            };
+
+            confirmBtn.onclick = () => {
+                cleanup();
+                onConfirm();
+            };
+            cancelBtn.onclick = cleanup;
+        }
+
+        function confirmReset() {
+            openConfirmModal(
+                'Resetować wszystkie dane?',
+                'Spowoduje to usunięcie całej historii posiłków i pomiarów wagi oraz przywrócenie ustawień domyślnych (3200 kcal / 57.0 kg).',
+                () => {
+                    localStorage.removeItem('masaTrackerData_v1');
+                    appState = {
+                        goals: { ...DEFAULT_GOALS },
+                        dailyLogs: [],
+                        weightLogs: [{
+                            id: 'w-reset-' + Date.now(),
+                            date: getTodayStr(),
+                            weight: DEFAULT_GOALS.startWeight,
+                            biceps: '', chest: '', waist: ''
+                        }],
+                        checklist: JSON.parse(JSON.stringify(DEFAULT_CHECKLIST)),
+                        isSampleData: false
+                    };
+                    saveState();
+                    renderAll();
+                    showToast('Wszystkie dane zostały zresetowane.', 'info');
+                }
+            );
+        }
+
+        function exportCSV() {
+            let csv = '\uFEFF';
+            csv += '=== POMIARY TYGODNIOWE WAGI ===\n';
+            csv += 'Data;Waga (kg);Biceps (cm);Klatka (cm);Pas (cm)\n';
+            appState.weightLogs.forEach(w => {
+                csv += `${w.date};${w.weight};${w.biceps || ''};${w.chest || ''};${w.waist || ''}\n`;
+            });
+
+            csv += '\n=== DZIENNIK KALORII I TRENINGOW ===\n';
+            csv += 'Data;Kalorie (kcal);Bialko (g);Tluszcze (g);Weglowodany (g);Woda (L);Silownia;Notatka\n';
+            appState.dailyLogs.forEach(d => {
+                const cleanNote = (d.note || '').replace(/;/g, ',');
+                csv += `${d.date};${d.kcal};${d.protein};${d.fat};${d.carbs};${d.water};${d.workout ? 'TAK' : 'NIE'};${cleanNote}\n`;
+            });
+
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `EliteTracker_Raport_${getTodayStr()}.csv`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+
+            showToast('Pobrano raport CSV na urządzenie!', 'success');
+        }
+
+        function formatDatePL(dateStr) {
+            if (!dateStr) return '';
+            const parts = dateStr.split('-');
+            if (parts.length !== 3) return dateStr;
+            return `${parts[2]}.${parts[1]}.${parts[0]}`;
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function showToast(message, type = 'success') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            
+            let colors = 'bg-cardbg border-limeaccent/50 text-white';
+            let icon = '✅';
+            if (type === 'info') {
+                colors = 'bg-cardbg border-blue-500/50 text-blue-100';
+                icon = 'ℹ️';
+            } else if (type === 'error') {
+                colors = 'bg-cardbg border-red-500/50 text-red-100';
+                icon = '⚠️';
+            }
+
+            toast.className = `pointer-events-auto flex items-center gap-2.5 px-4 py-3 rounded-xl border ${colors} shadow-2xl text-xs sm:text-sm font-medium transition-all duration-300 transform translate-y-2 opacity-0`;
+            toast.innerHTML = `<span>${icon}</span><span>${escapeHtml(message)}</span>`;
+            
+            container.appendChild(toast);
+            
+            requestAnimationFrame(() => {
+                toast.classList.remove('translate-y-2', 'opacity-0');
+            });
+
+            setTimeout(() => {
+                toast.classList.add('translate-y-2', 'opacity-0');
+                setTimeout(() => toast.remove(), 300);
+            }, 3500);
+        }
+    </script>
+</body>
+</html>
